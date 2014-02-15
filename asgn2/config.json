@@ -1,0 +1,8 @@
+{
+	"selfHandle":"tcp://127.0.0.1:",
+	"peersPid": "1,2",
+	"peersHandle":"tcp://127.0.0.1:",
+	"startAddress":5000,
+	"startMsgId":1000,
+	"bufSize":5000
+}
