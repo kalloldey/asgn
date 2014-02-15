@@ -38,15 +38,25 @@ What is the config file format?
 Configuration file need to be in json
 Below is a example of config.json file
 	{
-        "selfHandle":"tcp://127.0.0.1:",
+
+        "selfHandle":"tcp://127.0.0.1:", 
+
         "peersPid": "1,2",
+
         "peersHandle":"tcp://127.0.0.1:",
+
         "startAddress":5000,
+
         "startMsgId":1000,
+
         "bufSize":5000,
+
 	"timeOutMin":100,
+
 	"timeOutRand":200
+
 	}
+
 Here handle means the communication end point for a cluster.
 Please make sure the Pid given to instantiate a server exist in the peersPid list,
 for more clarification I can say, peersPid will have all the servers Pid including 
