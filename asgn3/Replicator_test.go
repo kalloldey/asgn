@@ -18,20 +18,20 @@ func Test_General(t *testing.T) {
 		for j := 0; j < total; j++ {
 			if servers[j].IsLeader() == true {
 				if flag == true {
-					//					 t.Error("Multiple Leader")
-					fmt.Println(">>>>>>>>> Also Leader is :", (j + 1), " for term: ", servers[j].Term())
+										 t.Error("Multiple Leader")
+				//	fmt.Println(">>>>>>>>> Also Leader is :", (j + 1), " for term: ", servers[j].Term())
 				} else {
 					flag = true
-					fmt.Println(">>>>>>>>>>Leader is :", (j + 1), " for term: ", servers[j].Term())
-					servers[j].Detach()
-					time.Sleep(500 * time.Millisecond)
+				//	fmt.Println(">>>>>>>>>>Leader is :", (j + 1), " for term: ", servers[j].Term())
+				//	servers[j].Detach()
+				//	time.Sleep(500 * time.Millisecond)
 				}
 			}
 		}
 		if flag == false {
-			//			t.Error("No Leader")
+				//		t.Error("No Leader")
 		}
-		fmt.Println("It", i, " end =========================")
+//		fmt.Println("It", i, " end =========================")
 		time.Sleep(500 * time.Millisecond)
 	}
 }

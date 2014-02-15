@@ -247,7 +247,7 @@ func TelecomMinistry(rp *Replicator) {
 
 func GetNew(FileName string, PidArg int) *Replicator {
 	//File read starts ....
-	fmt.Println("Start of GetNew")
+//	fmt.Println("Start of GetNew")
 	repl := new(Replicator)
 	configFile, err := os.Open(FileName)
 	if err != nil {
@@ -275,6 +275,6 @@ func GetNew(FileName string, PidArg int) *Replicator {
 	go TelecomMinistry(repl)
 	go ElectionCommison(repl)
 	go SendHBM(repl)
-	fmt.Println("End of GetNEw .. returing")
+//	fmt.Println("End of GetNEw .. returing")
 	return repl
 }
