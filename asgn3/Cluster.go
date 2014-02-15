@@ -1,4 +1,3 @@
-
 package replicator
 
 import (
@@ -85,7 +84,7 @@ func (r Raftserver) DelPeer(n int) {
 
 //This will directly accept the arguments
 /*New_DirectArg(self pid, "pid of peers in a comma separated string", Strat address of the port as int, Self handle in string, Peers handle in string)*/
-func New_DirectArg(PidArg int, ArgPeersPid string,ArgStartAddr int, ArgSelfHandle string, ArgPeersHandle string) *Raftserver { //To create the server object
+func New_DirectArg(PidArg int, ArgPeersPid string, ArgStartAddr int, ArgSelfHandle string, ArgPeersHandle string) *Raftserver { //To create the server object
 	temp := strings.Split(ArgPeersPid, ",")
 	rfs := new(Raftserver) //Instatiate a private server object
 	j := 0
@@ -117,7 +116,6 @@ func New_DirectArg(PidArg int, ArgPeersPid string,ArgStartAddr int, ArgSelfHandl
 
 	return rfs
 } //WR
-
 
 //This will take filename as argument
 func New(FileName string, PidArg int) *Raftserver { //To create the server object

@@ -53,19 +53,19 @@ func (r Replicator) Term() int {
 	return r.CurrentTerm
 }
 func (r Replicator) IsLeader() bool {
-//	r.LeadLock.Lock()
+	//	r.LeadLock.Lock()
 	if r.LeaderFlag == 2 {
-//		r.LeadLock.Unlock()
+		//		r.LeadLock.Unlock()
 		return true
 	}
-//	r.LeadLock.Unlock()
+	//	r.LeadLock.Unlock()
 	return false
 }
 
 func (r Replicator) SetLeadFlag(a int) {
-//	r.LeadLock.Lock()
+	//	r.LeadLock.Lock()
 	r.LeaderFlag = a
-//	r.LeadLock.Unlock()
+	//	r.LeadLock.Unlock()
 }
 
 func (r Replicator) Detach() {
