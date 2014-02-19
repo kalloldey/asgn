@@ -14,6 +14,13 @@ import (
 	"encoding/json"
 )
 
+func (r Replicator) P(a string, b int, c int){
+	ck:=1
+	if(ck==1){
+		fmt.Println("[(",r.MyPid ,") ",a," || ",b," :: ",c," ]")
+	}
+}
+
 type Raft interface {
 	Term() int
 	IsLeader() bool
@@ -129,14 +136,16 @@ func SetTerm(rp *Replicator, newTerm int) int {
 func StartVote(rp *Replicator) {
 	//Increase term by one
 	voteForTerm := rp.CurrentTerm + 1
-	rp.VoteReceived = 0      //will be only valid when I am in candidate state
+	rp.P("Vote starting for term: ",voteForTerm,0)	
+	rp.VoteReceived = 1      //will be only valid when I am in candidate state
 	rp.LeaderFlag = 1        //convert to candidate state
 	SetTerm(rp, voteForTerm) //Save in file
 	//Vote for me msg pattern:    VOTEME$<MyPid>$ForTheTerm$
 	sm := string("VOTEME$" + strconv.Itoa(rp.MyPid) + "$" + strconv.Itoa(voteForTerm))
-	rp.Locker.Lock()
+//	rp.Locker.Lock()
+	rp.P("SendMsg= "+sm,0,0)
 	rp.BackServer.Outbox() <- &Envelope{Pid: -1, MsgId: 0, Msg: sm}
-	rp.Locker.Unlock()
+//	rp.Locker.Unlock()
 }
 
 func ElectionCommison(rp *Replicator) {
@@ -149,6 +158,7 @@ func ElectionCommison(rp *Replicator) {
 		case <-rp.HBRecChan:
 			//HB received go for the next iteration of for loop ..
 			//NO OP
+			continue
 		case <-time.After(tmout * time.Millisecond):
 			StartVote(rp)
 		}
@@ -157,7 +167,6 @@ func ElectionCommison(rp *Replicator) {
 
 func SendHBM(rp *Replicator) { //when ever i am leader send Heart beat message
 	for {
-		time.Sleep(time.Duration(rp.TimeOutMin-20) * time.Millisecond)
 		if rp.IsLeader() == false {
 			continue
 		}
@@ -165,9 +174,11 @@ func SendHBM(rp *Replicator) { //when ever i am leader send Heart beat message
 			continue
 		}
 		sm := string("HEARTBEAT$" + strconv.Itoa(rp.MyPid) + "$" + strconv.Itoa(rp.CurrentTerm))
-		rp.Locker.Lock()
+//		rp.Locker.Lock()
+		rp.P("Send HBM for term ",rp.CurrentTerm,0)
 		rp.BackServer.Outbox() <- &Envelope{Pid: -1, MsgId: 0, Msg: sm}
-		rp.Locker.Unlock()
+//		rp.Locker.Unlock()
+		time.Sleep(time.Duration(rp.TimeOutMin-20) * time.Millisecond)
 	}
 }
 
@@ -192,6 +203,7 @@ func TelecomMinistry(rp *Replicator) {
 		case "VOTEDENY":
 			{
 				if forTerm > rp.CurrentTerm {
+					rp.P("Get deny msg from,term",serverPid,forTerm)
 					rp.SetLeadFlag(0) //become follower again as big term is present in somewhere
 					SetTerm(rp, forTerm)
 				}
@@ -204,14 +216,16 @@ func TelecomMinistry(rp *Replicator) {
 					//covert own to follower state rp.
 					SetTerm(rp, forTerm)
 					denmsg := string("VOTEGRANT$" + strconv.Itoa(rp.MyPid) + "$" + strconv.Itoa(forTerm))
-					rp.Locker.Lock()
+//					rp.Locker.Lock()
+					rp.P("I am GIVING vote to, in term",serverPid,forTerm)
 					rp.BackServer.Outbox() <- &Envelope{Pid: serverPid, MsgId: 0, Msg: denmsg}
-					rp.Locker.Unlock()
+//					rp.Locker.Unlock()
 				} else {
 					denmsg := string("VOTEDENY$" + strconv.Itoa(rp.MyPid) + "$" + strconv.Itoa(forTerm))
-					rp.Locker.Lock()
+//					rp.Locker.Lock()
+					rp.P("I am DENYing vote to,term ",serverPid,forTerm)
 					rp.BackServer.Outbox() <- &Envelope{Pid: serverPid, MsgId: 0, Msg: denmsg}
-					rp.Locker.Unlock()
+//					rp.Locker.Unlock()
 				}
 			}
 		case "HEARTBEAT":
@@ -219,7 +233,10 @@ func TelecomMinistry(rp *Replicator) {
 				if rp.CurrentTerm > forTerm {
 					//Not possible error case
 				} else {
-					SetTerm(rp, forTerm)
+					if(forTerm !=rp.CurrentTerm){
+						SetTerm(rp, forTerm)
+					}
+					rp.P("Get HBM from leader, term", serverPid, forTerm)
 					rp.HBRecChan <- 1
 					rp.SetLeadFlag(0)
 					rp.PidOfLeader = serverPid
@@ -230,8 +247,11 @@ func TelecomMinistry(rp *Replicator) {
 			{
 				if rp.LeaderFlag == 1 && forTerm == rp.CurrentTerm {
 					rp.VoteReceived++
+					rp.P("Received VOTE,from in term",serverPid,forTerm)					
 					if rp.VoteReceived >= ((rp.TotalPeer / 2) + (rp.TotalPeer % 2)) { //self become leader
-						rp.SetLeadFlag(2)
+	//					rp.SetLeadFlag(2)
+						rp.LeaderFlag = 2
+						rp.P("I am now leader,total vote rec,term",rp.VoteReceived,forTerm)
 						rp.PidOfLeader = rp.MyPid
 					}
 				}
@@ -266,7 +286,8 @@ func GetNew(FileName string, PidArg int) *Replicator {
 	repl.CurrentTerm = GetTerm(repl)
 	repl.TimeOutMin = sett.TimeOutMin
 	repl.TimeOutRand = sett.TimeOutRand
-	repl.TotalPeer = len(strings.Split(sett.PeersPid, ",")) - 1
+	repl.TotalPeer = len(strings.Split(sett.PeersPid, ","))
+	repl.P("Total Peer : ",repl.TotalPeer,0)
 	repl.Detached = 0
 	repl.Locker = &sync.Mutex{}
 	repl.LeadLock = &sync.Mutex{}
@@ -275,6 +296,7 @@ func GetNew(FileName string, PidArg int) *Replicator {
 	go TelecomMinistry(repl)
 	go ElectionCommison(repl)
 	go SendHBM(repl)
+	repl.P("Initiate ",0,0)
 //	fmt.Println("End of GetNEw .. returing")
 	return repl
 }

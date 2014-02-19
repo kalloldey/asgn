@@ -5,6 +5,6 @@
 	"startAddress":5000,
 	"startMsgId":1000,
 	"bufSize":5000,
-	"timeoutMin":500,
-	"timeoutRand":700
+	"timeoutMin":400,
+	"timeoutRand":300
 }
