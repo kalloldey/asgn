@@ -41,6 +41,7 @@ type Replicator struct {
 	TimeOutRand  int
 	HBRecChan    chan int
 	VoteReceived int
+	BallotReceived int
 	Locker       *sync.Mutex
 	LeadLock     *sync.Mutex
 }
@@ -60,12 +61,9 @@ func (r Replicator) Term() int {
 	return r.CurrentTerm
 }
 func (r Replicator) IsLeader() bool {
-	//	r.LeadLock.Lock()
 	if r.LeaderFlag == 2 {
-		//		r.LeadLock.Unlock()
 		return true
 	}
-	//	r.LeadLock.Unlock()
 	return false
 }
 
@@ -75,12 +73,14 @@ func (r Replicator) SetLeadFlag(a int) {
 	//	r.LeadLock.Unlock()
 }
 
-func (r Replicator) Detach() {
+func (r *Replicator) Detach() {
+	r.P("I am inside Detach call",0,0)
 	r.Detached = 1
 }
 
-func (r Replicator) Attach() {
-	r.CurrentTerm = GetTerm(&r)
+func (r *Replicator) Attach() {
+	r.P("I am inside Attach call",0,0)
+	r.CurrentTerm = GetTerm(r)
 	r.Detached = 0
 }
 
@@ -135,9 +135,17 @@ func SetTerm(rp *Replicator, newTerm int) int {
 
 func StartVote(rp *Replicator) {
 	//Increase term by one
+	if rp.LeaderFlag ==2 {  //I am already leader .. no more election needed
+		return
+	}
+	if rp.Detached == 1 {//I am detached why tell me to start vote ???
+		rp.P("I am detached",0,0)
+		return 
+	}
 	voteForTerm := rp.CurrentTerm + 1
 	rp.P("Vote starting for term: ",voteForTerm,0)	
 	rp.VoteReceived = 1      //will be only valid when I am in candidate state
+	rp.BallotReceived = 1
 	rp.LeaderFlag = 1        //convert to candidate state
 	SetTerm(rp, voteForTerm) //Save in file
 	//Vote for me msg pattern:    VOTEME$<MyPid>$ForTheTerm$
@@ -148,11 +156,14 @@ func StartVote(rp *Replicator) {
 //	rp.Locker.Unlock()
 }
 
-func ElectionCommison(rp *Replicator) {
+func ElectionCommison(rp *Replicator) {  //Detached case taken care by the StartVote .. so here can ignore
 	for {
-		if rp.Detached == 1 {
+	/*	if rp.Detached == 1 {
 			continue
 		}
+		if rp.LeaderFlag == 2 {
+			continue
+		}*/
 		tmout := time.Duration(rp.TimeOutMin + rand.Intn(rp.TimeOutRand+rp.MyPid*2))
 		select {
 		case <-rp.HBRecChan:
@@ -165,20 +176,25 @@ func ElectionCommison(rp *Replicator) {
 	}
 }
 
-func SendHBM(rp *Replicator) { //when ever i am leader send Heart beat message
+
+//func (rp Replicator) SendHBM(){  //<--abandoned
+
+func SendHBM(rp *Replicator) { //when ever i am leader send Heart beat message  //Detached case taken care
 	for {
+		time.Sleep(time.Duration(100) * time.Millisecond)
 		if rp.IsLeader() == false {
 			continue
 		}
 		if rp.Detached == 1 {
+			rp.P("I am detached",0,0)
+			time.Sleep(time.Duration(100) * time.Millisecond)  //if I am detached .. so use this to slow down checking
 			continue
 		}
 		sm := string("HEARTBEAT$" + strconv.Itoa(rp.MyPid) + "$" + strconv.Itoa(rp.CurrentTerm))
 //		rp.Locker.Lock()
-		rp.P("Send HBM for term ",rp.CurrentTerm,0)
+		rp.P("Send HBM for term, detach value ",rp.CurrentTerm,rp.Detached)
 		rp.BackServer.Outbox() <- &Envelope{Pid: -1, MsgId: 0, Msg: sm}
 //		rp.Locker.Unlock()
-		time.Sleep(time.Duration(rp.TimeOutMin-20) * time.Millisecond)
 	}
 }
 
@@ -189,10 +205,13 @@ func SendHBM(rp *Replicator) { //when ever i am leader send Heart beat message
 
 func TelecomMinistry(rp *Replicator) {
 	for {
+		rec := <-rp.BackServer.Inbox()
+//		rp.P("Detach valu of mine =",rp.Detached,0)
 		if rp.Detached == 1 {
+			rp.P("I am detached",0,0)
+			time.Sleep(time.Duration(100) * time.Millisecond)
 			continue
 		}
-		rec := <-rp.BackServer.Inbox()
 		temp := strings.Split(rec.Msg, "$")
 		//		fmt.Println("Msg found:  ",rec.Msg)
 		serverPid, _ := strconv.Atoi(temp[1])
@@ -204,8 +223,9 @@ func TelecomMinistry(rp *Replicator) {
 			{
 				if forTerm > rp.CurrentTerm {
 					rp.P("Get deny msg from,term",serverPid,forTerm)
-					rp.SetLeadFlag(0) //become follower again as big term is present in somewhere
+					rp.LeaderFlag = 0 //become follower again as big term is present in somewhere
 					SetTerm(rp, forTerm)
+					//Doubt to clear: Will VOTEDENY will get the current update term from the responder server ??
 				}
 			}
 		case "VOTEME":
@@ -217,6 +237,7 @@ func TelecomMinistry(rp *Replicator) {
 					SetTerm(rp, forTerm)
 					denmsg := string("VOTEGRANT$" + strconv.Itoa(rp.MyPid) + "$" + strconv.Itoa(forTerm))
 //					rp.Locker.Lock()
+					rp.LeaderFlag = 0
 					rp.P("I am GIVING vote to, in term",serverPid,forTerm)
 					rp.BackServer.Outbox() <- &Envelope{Pid: serverPid, MsgId: 0, Msg: denmsg}
 //					rp.Locker.Unlock()
@@ -232,13 +253,17 @@ func TelecomMinistry(rp *Replicator) {
 			{
 				if rp.CurrentTerm > forTerm {
 					//Not possible error case
+					/*This only can happen if a node goes down when it was leader and after sometime
+					came back and continue to send hbm .. however this will be automatically taken 
+					care by that node and it will steps down to follower state once the actual leader 
+					send message*/
 				} else {
 					if(forTerm !=rp.CurrentTerm){
 						SetTerm(rp, forTerm)
 					}
 					rp.P("Get HBM from leader, term", serverPid, forTerm)
 					rp.HBRecChan <- 1
-					rp.SetLeadFlag(0)
+					rp.LeaderFlag = 0
 					rp.PidOfLeader = serverPid
 				}
 
@@ -246,10 +271,9 @@ func TelecomMinistry(rp *Replicator) {
 		case "VOTEGRANT":
 			{
 				if rp.LeaderFlag == 1 && forTerm == rp.CurrentTerm {
-					rp.VoteReceived++
+					rp.VoteReceived++					
 					rp.P("Received VOTE,from in term",serverPid,forTerm)					
 					if rp.VoteReceived >= ((rp.TotalPeer / 2) + (rp.TotalPeer % 2)) { //self become leader
-	//					rp.SetLeadFlag(2)
 						rp.LeaderFlag = 2
 						rp.P("I am now leader,total vote rec,term",rp.VoteReceived,forTerm)
 						rp.PidOfLeader = rp.MyPid
